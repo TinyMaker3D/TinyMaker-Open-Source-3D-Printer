@@ -354,6 +354,10 @@ void screen1111_state(){
       gfx2->setCursor(32, 14);
       gfx2->print("Finish :)");
         break;     
+      case 9:
+      gfx2->setCursor(33, 14);
+      gfx2->print("Resting...");
+        break;    
     }         
   }
 }
@@ -1127,7 +1131,7 @@ void screen23111(){
   byte buttonBackClicked = 0;    
   digitalWrite(FAN, HIGH);
   gfx1->fillScreen(WHITE);
-  digitalWrite(LED, HIGH); 
+  ledcWrite(LED, 255);
   startTime = millis();
   Duration = 0;
   while (Duration <= ExposureMillis){
@@ -1135,7 +1139,7 @@ void screen23111(){
     if (digitalRead(buttonBack) == LOW){
       buttonBackClicked = 1;
       gfx1->fillScreen(BLACK);      
-      digitalWrite(LED, LOW);
+      ledcWrite(LED, 0);
       gfx2->setTextColor(WHITE);
       gfx2->setCursor(46, 43);
       gfx2->print("Canceled");
@@ -1162,7 +1166,7 @@ void screen23111(){
   }
   if(buttonBackClicked == 0){
     gfx1->fillScreen(BLACK);
-    digitalWrite(LED, LOW);
+    ledcWrite(LED, 0);
     gfx2->setTextColor(WHITE);
     gfx2->setCursor(50, 43);
     gfx2->print("Done! :)");
