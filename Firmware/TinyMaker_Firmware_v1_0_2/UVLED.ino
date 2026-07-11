@@ -25,7 +25,9 @@ void turn_on_LED(){
   while (Duration <= ExposureMillis){
     Duration = millis()-startTime;
     Duration2 = millis()-startTime2;
-    
+
+    web_loop(); // keep the web UI responsive during exposure (uploads refused mid-print)
+
     // Check button inputs every 500ms
     if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1111 && print_canceled == false && print_paused == false){
       screen1111UP();

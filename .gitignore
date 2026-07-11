@@ -1,0 +1,13 @@
+# Per-user runtime config created on the SD card — not part of the source.
+# (wifi.txt holds credentials; the template wifi.txt.example is tracked instead.)
+wifi.txt
+settings.txt
+
+# Local flash backups (e.g. from `esptool read-flash`)
+*_backup.bin
+stock_backup.bin
+
+# Arduino / build output
+build/
+*.elf
+*.map

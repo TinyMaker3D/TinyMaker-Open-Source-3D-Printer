@@ -1,26 +1,57 @@
 /**
- * @brief Screen 0: Welcome Screen
- * Displays "Hello, World!" message on startup.
+ * @brief Screen 0: Boot Splash
+ * A resin drop cures upward one glowing layer at a time, then the "TinyMaker" wordmark
+ * types in with an underline, while a boot progress bar fills. Grounded in what an MSLA
+ * printer does (cure layer by layer); reuses the UI's orange/blue palette.
  */
 void screen0(){
+  const uint16_t HOTORANGE = 0xFEE0; // bright "just-cured" leading layer (UV glow)
+  const uint16_t TRACKGREY = 0x2104; // dark progress-bar track
+  const uint8_t  widths[8] = {26, 38, 44, 46, 44, 38, 28, 14}; // drop silhouette, bottom->top
+  const int cx = 33;                 // drop centre X
+
   gfx2->fillScreen(BLACK);
-  gfx2->setFont(&FreeSans8pt7b);
-  gfx2->setCursor(122, 74);
-  gfx2->setTextColor(WHITE);
-  gfx2->setTextSize(1);
-  gfx2->println("1.0.2");
-  for (int i = 0; i < 40; i++) {
-    gfx2->setCursor(35, i);
-    gfx2->setTextColor(ORANGE);
-    gfx2->println("Hello, World!"); 
-    delay(30);
-    gfx2->setCursor(35, i);
-    gfx2->setTextColor(BLACK);
-    gfx2->println("Hello, World!");
+  gfx2->fillRoundRect(6, 72, 148, 5, 2, TRACKGREY); // progress track
+  gfx2->fillRect(cx - 16, 64, 32, 2, 0x8410);       // build-plate tick
+
+  // 1) Cure the drop, one layer at a time, flashing bright then settling to orange.
+  for (int i = 0; i < 8; i++) {
+    int w = widths[i];
+    int y = 60 - i * 5;
+    gfx2->fillRoundRect(cx - w / 2, y, w, 4, 1, HOTORANGE);
+    gfx2->fillRoundRect(6, 72, (148 * (i + 1)) / 11, 5, 2, ORANGE); // grow progress
+    delay(70);
+    gfx2->fillRoundRect(cx - w / 2, y, w, 4, 1, ORANGE);
+    delay(55);
   }
-  gfx2->setCursor(35, 40);
+
+  // 2) Type in the "TinyMaker" wordmark (Tiny = white, Maker = orange).
+  gfx2->setFont(&FreeSans8pt7b);
+  gfx2->setTextSize(1);
+  gfx2->setCursor(58, 40);
+  gfx2->setTextColor(WHITE);
+  const char *a = "Tiny";
+  for (int k = 0; a[k]; k++) { gfx2->print(a[k]); delay(55); }
   gfx2->setTextColor(ORANGE);
-  gfx2->println("Hello, World!"); 
+  const char *b = "Maker";
+  for (int k = 0; b[k]; k++) { gfx2->print(b[k]); delay(55); }
+  int endX = gfx2->getCursorX();
+
+  // 3) Sweep an underline in, and finish the progress bar.
+  for (int x = 58; x <= endX; x += 5) {
+    gfx2->fillRect(58, 43, x - 58, 2, ORANGE);
+    delay(16);
+  }
+  gfx2->fillRect(58, 43, endX - 58, 2, ORANGE);
+  gfx2->fillRoundRect(6, 72, 148, 5, 2, ORANGE);
+
+  // 4) Version tag.
+  gfx2->setFont();
+  gfx2->setTextColor(0x879F);
+  gfx2->setCursor(60, 50);
+  gfx2->print("v1.0.2");
+
+  delay(300);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,6 +94,8 @@ void screen1(){
   gfx2->setTextSize(1);
   gfx2->setCursor(63, 71);
   gfx2->print("Print");
+
+  draw_wifi_glyph(143, 2); // WiFi status indicator (top-right corner)
 
   screen = 1;
 }
@@ -128,6 +161,7 @@ void screen11(){
   gfx2->fillRoundRect(82, 58, 72, 18, 2,  0x879F);
   gfx2->setCursor(102, 71);
   gfx2->println("Next");
+  draw_wifi_glyph(143, 3); // WiFi status indicator in the header
   screen = 11;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1612,9 +1646,10 @@ void screen311(){
       Slow_Lift_Feedrate = EEPROM.read(8);
       Fast_Lift_Feedrate = EEPROM.read(9);
       Drop_Back_Feedrate = EEPROM.read(10);
-      
+      save_settings_to_sd(); // mirror the reset defaults to the SD file too
+
       setting_item = 10;
-      screen31DOWN(); // Refresh Screen           
+      screen31DOWN(); // Refresh Screen
     } 
   }
   delay(300);

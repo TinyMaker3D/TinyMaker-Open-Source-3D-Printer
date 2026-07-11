@@ -21,6 +21,48 @@
 #include "FreeSans8pt7b.h"       // Custom font
 #include <PNGdec.h>              // PNG decoder library for reading print layers
 #include <SdFat.h>               // SD card file system library
+#include <WiFi.h>                // ESP32 built-in WiFi (WiFiServer / WiFiClient)
+#include <ESPmDNS.h>             // mDNS so the printer answers to tinymaker.local
+// NOTE: we deliberately do NOT include <WebServer.h>. On the ESP32 core it pulls in
+// FS.h, whose fs::File collides with SdFat 1.1.2's global File class. Instead we run a
+// tiny hand-rolled HTTP server on WiFiServer (see Network.ino), which keeps full SdFat
+// access in this same translation unit.
+
+// ===================================================================================
+// WiFi / Network Configuration
+// ===================================================================================
+// WiFi is configured at RUNTIME - no credentials are compiled into the firmware, so
+// this build is safe to publish/distribute. Credentials come from a plain-text file
+// on the SD card ("/wifi.txt": line 1 = network name, line 2 = password), or are set
+// from the setup page while the printer is in hotspot mode (which writes that file).
+//
+// Boot behavior: if /wifi.txt has a network, join it (STA). Otherwise - or if the join
+// fails - host a hotspot named AP_SSID so the setup page is always reachable.
+// NOTE: ESP32 WiFi is 2.4GHz only.
+#define WIFI_CONFIG_FILE "/wifi.txt"     // SD-card file holding SSID + password
+#define SETTINGS_FILE    "/settings.txt" // SD-card file holding print settings (survives reflashing)
+#define AP_SSID          "TinyMaker"    // hotspot name shown when unconfigured/offline
+#define AP_PASS          "tinymaker123" // hotspot password (must be >= 8 chars)
+#define MDNS_HOST        "tinymaker"    // browse to http://tinymaker.local
+
+WiFiServer httpd(80);          // raw TCP server; we speak minimal HTTP ourselves
+bool     wifi_is_ap = false;   // true if we ended up in AP (hotspot) mode
+String   wifi_ip    = "";      // our IP address as text, for the LCD + web UI
+String   sta_ssid   = "";      // network name loaded from /wifi.txt
+String   sta_pass   = "";      // network password loaded from /wifi.txt
+
+// Network print-control request flags.
+// Web handlers set these; they are consumed at SAFE points inside the print routine
+// (layer boundaries / pause loop) so network commands never disturb exposure timing.
+volatile bool net_start_request  = false; // request: begin a print of net_start_folder
+volatile bool net_stop_request   = false; // request: cancel the running print
+volatile bool net_pause_request  = false; // request: pause the running print
+volatile bool net_resume_request = false; // request: resume from pause
+char net_start_folder[101] = {0};         // folder name requested by /start
+
+// True only while a print job is actually executing. Web handlers read this so they
+// can refuse SD-mutating actions (upload/delete/start) while the SD card is in use.
+volatile bool printing = false;
 
 // ===================================================================================
 // Pin Definitions
@@ -202,23 +244,21 @@ void setup() {
   // -----------------------------------------------------------------------------------
   // Settings Loading
   // -----------------------------------------------------------------------------------
-  // Initialize EEPROM with 24 bytes of space to read stored parameters.  
-  EEPROM.begin(24);
+  // Load print settings. Priority: SD-card file (/settings.txt, survives reflashing) ->
+  // EEPROM (if it looks valid) -> built-in defaults. Whatever we load is mirrored into
+  // EEPROM so the on-printer menu stays consistent, and seeded to the SD file if missing.
+  // (See Settings.ino.)
+  init_settings();
 
-  // Read stored values from specific addresses.
-  // Layer Height is stored multiplied by 100 to save as integer, so divide by 100.00 to restore float  
-  Layer_Height = EEPROM.read(1) / 100.00;
-  Base_Exposure = EEPROM.read(2);
-  Regular_Exposure = EEPROM.read(3);
-  Base_Layer = EEPROM.read(4);
-  Transition_Layer = EEPROM.read(5);
-  Slow_Lift_Distance = EEPROM.read(6);
-  Fast_Lift_Distance = EEPROM.read(7);
-  Slow_Lift_Feedrate = EEPROM.read(8);
-  Fast_Lift_Feedrate = EEPROM.read(9);
-  Drop_Back_Feedrate = EEPROM.read(10);
-  
-  delay(1000);
+  // -----------------------------------------------------------------------------------
+  // Network Bring-up
+  // -----------------------------------------------------------------------------------
+  // Join WiFi (or fall back to hotspot), start the web server, then show the
+  // connection details on the UI LCD for a couple of seconds so you can note the IP.
+  wifi_setup();
+  show_network_screen();
+
+  delay(500);
   screen1(); // jumps to Main Menu
 }
 
@@ -229,11 +269,20 @@ void setup() {
  * @brief Main Loop
  * Handles button inputs and UI state transitions continuously.
  */
-void loop() {  
+void loop() {
+  // -----------------------------------------------------------------------------------
+  // Network Servicing (idle)
+  // Handle any pending web clients (uploads, listing, status, start/stop), then act on
+  // a web "start print" request. This only runs while idle in the menus; once a print
+  // begins, run_print_job() services the network itself at safe points.
+  // -----------------------------------------------------------------------------------
+  web_loop();
+  handle_network_start();
+
   // -----------------------------------------------------------------------------------
   // Back Button Handling
   // Only triggers if the button is pressed (LOW)
-  // -----------------------------------------------------------------------------------  
+  // -----------------------------------------------------------------------------------
   if (digitalRead(buttonBack) == LOW) {
     switch (screen) {
       case 11:
@@ -524,251 +573,8 @@ void loop() {
       }
       }
         break;
-      case 111: {
-        homing_canceled = false;
-        print_paused = false;
-        print_canceled = false;
-        current_state = 0;
-        current_layer = 0;
-        Position_before_pause = 0;
-        Transition_Exposure = Base_Exposure;
-        screen1111();
-        gfx2->fillRect(136, 52, 6, 16, 0x8410);
-        gfx2->fillRect(146, 52, 6, 16, 0x8410);        
-        screen1111_state();
-        screen1111UP();
-        delay(500);
-
-        // -------------------------------------------------------------------------------
-        // Homing Sequence
-        // -------------------------------------------------------------------------------
-        stepper.setCurrentPosition(0);
-        stepper.setMaxSpeed(Drop_Back_Feedrate * steps_mm / 60);
-        stepper.enableOutputs();
-        long initial_homing = 0;
-        long current_position;
-        while(!digitalRead(end_stop)){
-          stepper.moveTo(initial_homing);  // Set the position to move to
-          initial_homing--;  // Decrease by 1 for next move if needed
-          stepper.run();  // Start moving the stepper          
-          current_position = stepper.currentPosition();
-          if (current_position < -106799){
-            stepper.disableOutputs();
-            homing_canceled = true;
-            gfx2->fillRoundRect(5, 5, 150, 70, 7, BLACK);
-            gfx2->fillRoundRect(7, 7, 146, 66, 5, RED);
-            gfx2->fillRoundRect(9, 9, 142, 62, 3, BLACK);
-            gfx2->fillRoundRect(16, 11, 5, 10, 1, RED); 
-            gfx2->fillCircle(18, 25, 2, RED); 
-            gfx2->setTextColor(WHITE);
-            gfx2->setTextSize(1);
-            gfx2->setCursor(27, 23);
-            gfx2->println("Homing error,");
-            gfx2->setCursor(13, 41);
-            gfx2->println("print canceled."); 
-            gfx2->fillRoundRect(82, 51, 67, 18, 2,  0x879F);
-            gfx2->setCursor(100, 64);
-            gfx2->println("OK :(");
-            while(digitalRead(buttonOK) == HIGH);
-            break;  
-          }
-          if (Duration >= 500 && screen == 1111 && digitalRead(buttonOK) == LOW) {
-            screen11111();
-            startTime = millis();
-          }
-          Duration = millis()-startTime;
-          if (Duration >= 500 && screen == 11111 && digitalRead(buttonOK) == LOW){
-            stepper.disableOutputs();
-            homing_canceled = true;
-            break;
-          }
-          if (Duration >= 500 && screen == 11111 && digitalRead(buttonBack) == LOW){
-            screen1111();
-            gfx2->fillRect(136, 52, 6, 16, 0x8410);
-            gfx2->fillRect(146, 52, 6, 16, 0x8410);            
-            screen1111_state();
-            screen1111UP();
-          }
-        }
-        delay(50);
-          
-        if (homing_canceled != true){
-          stepper.disableOutputs();
-          stepper.setCurrentPosition(0);
-          digitalWrite(FAN, HIGH);
-          if (screen != 11111){
-            gfx2->fillRect(136, 52, 6, 16, YELLOW);
-            gfx2->fillRect(146, 52, 6, 16, YELLOW);
-          }
-        }
-          
-        // -------------------------------------------------------------------------------
-        // Printing Loop
-        // -------------------------------------------------------------------------------       
-        while(!homing_canceled && !print_canceled){            
-          estimated_seconds = 0;
-          estimated_hours = 0;
-          estimated_minutes = 0;
-          motor_updown_time_total = 0;
-          if (current_layer < Base_Layer)
-            estimated_seconds += (Base_Layer - current_layer) * Base_Exposure;                
-          estimated_seconds += (layer_counter - current_layer) * Regular_Exposure;            
-          motor_updown_time_total += (layer_counter - current_layer - 1) * motor_updown_time;            
-          estimated_seconds += motor_updown_time_total;             
-          estimated_hours = estimated_seconds / 3600;
-          estimated_minutes = (estimated_seconds % 3600) / 60;
-                        
-          print_next_png();
-            
-          if (screen != 11111 && screen != 11112){                
-            gfx2->fillRoundRect(2, 38, 116, 40, 3, BLACK);
-            gfx2->setFont(&FreeSans8pt7b);
-            gfx2->setTextColor(WHITE);
-            gfx2->setTextSize(1);    
-            gfx2->setCursor(6, 54);
-            gfx2->print(current_layer);      
-            gfx2->print(" / ");
-            gfx2->print(layer_counter);
-            gfx2->setCursor(6, 74);
-            gfx2->print(estimated_hours);
-            gfx2->print("h ");
-            gfx2->print(estimated_minutes);
-            gfx2->print("min");
-          }
-          
-          if (current_state != 4 && current_state != 5){
-            current_state = 1;
-            screen1111_state();
-          }
-                  
-          turn_on_LED();          
-          gfx1->fillScreen(BLACK);
-          
-          if (current_state != 4 && current_state != 5){
-            current_state = 2;
-            screen1111_state();
-          }
-          lift_print();
-          delay(50);
-          
-          if(current_layer == layer_counter)
-            break;
-            
-          // -----------------------------------------------------------------------------
-          // Pause Handling
-          // -----------------------------------------------------------------------------          
-          if(print_paused == true){
-            Position_before_pause = stepper.currentPosition();
-            stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60);
-            stepper.enableOutputs();
-            if (Position_before_pause + (20 * steps_mm) <= max_height * steps_mm)
-              stepper.move(20 * steps_mm);
-            else
-              stepper.moveTo(max_height * steps_mm);  
-            while (stepper.distanceToGo()!= 0)
-              stepper.run();
-            stepper.disableOutputs();
-            delay(10); 
-
-            current_state = 6;
-            screen1111_state();
-            gfx2->fillRect(136, 12, 16, 16, RED);
-            gfx2->fillTriangle(136, 52, 136, 68, 152, 60, GREEN);            
-            screen1111DOWN();
-              
-            while(print_paused == true){
-              Duration2 = millis()-startTime2;
-              if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1112){
-              screen1111UP();
-              Duration2 = 0;
-              startTime2 = millis();
-              }
-              if (Duration2 >= 500 && digitalRead(buttonDown) == LOW && screen == 1112){
-              screen1111DOWN();
-              Duration2 = 0;
-              startTime2 = millis();
-              }
-              if (Duration2 >= 500 && digitalRead(buttonOK) == LOW && printing_item_updown == 1 && screen != 11111){
-              screen11111();
-              Duration2 = 0;
-              startTime2 = millis();
-              }
-              if (Duration2 >= 500 && digitalRead(buttonOK) == LOW && printing_item_updown == 0 && screen != 11113){
-              screen11113();
-              Duration2 = 0;
-              startTime2 = millis();
-              }
-              if (Duration2 >= 500 && digitalRead(buttonBack) == LOW && screen == 11111){
-              screen1111();
-              screen1111_state();
-              screen1112();
-              screen1111UP();
-              Duration2 = 0;
-              startTime2 = millis();
-              }
-              if (Duration2 >= 500 && digitalRead(buttonBack) == LOW && screen == 11113){
-              screen1111();
-              screen1111_state();
-              screen1112();
-              screen1111DOWN();
-              Duration2 = 0;
-              startTime2 = millis();
-              }
-              if (Duration2 >= 500 && digitalRead(buttonOK) == LOW && screen == 11111){
-              screen1111();
-              current_state = 4;
-              screen1111_state();
-              screen1111UP();
-              print_canceled = true;
-              print_paused = false;
-              }  
-              if (Duration2 >= 500 && digitalRead(buttonOK) == LOW && screen == 11113){
-              screen1111();
-              current_state = 7;
-              screen1111_state();           
-              gfx2->fillRect(136, 12, 16, 16, 0x8410);
-              gfx2->fillRect(136, 52, 6, 16, 0x8410);
-              gfx2->fillRect(146, 52, 6, 16, 0x8410);
-              gfx2->drawRoundRect(128, 44, 32, 32, 3, 0x8410);
-              stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60);
-              stepper.enableOutputs();
-              stepper.moveTo(Position_before_pause);  
-              while (stepper.distanceToGo()!= 0)
-                stepper.run();
-              stepper.disableOutputs();
-              delay(10);
-              gfx2->fillRect(136, 12, 16, 16, RED);
-              gfx2->fillRect(136, 52, 6, 16, YELLOW);
-              gfx2->fillRect(146, 52, 6, 16, YELLOW); 
-              gfx2->drawRoundRect(128, 44, 32, 32, 3, WHITE);
-              print_paused = false;    
-              }       
-            }                     
-          }
-          
-          if (!print_canceled){
-            current_state = 3;
-            screen1111_state();
-            lower_print();              
-          }           
-        } 
-        if (!homing_canceled){
-          if (!print_canceled){
-            current_state = 8;
-            screen1111_state();
-            gfx2->fillRect(136, 12, 16, 16, 0x8410);
-            gfx2->fillRect(136, 52, 6, 16, 0x8410);
-            gfx2->fillRect(146, 52, 6, 16, 0x8410);
-            if(printing_item_updown == 1)
-              gfx2->drawRoundRect(128, 4, 32, 32, 3, 0x8410);
-            if(printing_item_updown == 0)
-              gfx2->drawRoundRect(128, 44, 32, 32, 3, 0x8410);            
-          } 
-          lift_finished_print();
-        }
-        digitalWrite(FAN, LOW);
-        screen1(); 
-      }
+      case 111:
+        run_print_job();
         break;
       
       case 12:
@@ -846,7 +652,8 @@ void loop() {
       EEPROM.write(8, Slow_Lift_Feedrate);
       EEPROM.write(9, Fast_Lift_Feedrate);
       EEPROM.write(10, Drop_Back_Feedrate);
-      EEPROM.commit(); 
+      EEPROM.commit();
+      save_settings_to_sd(); // mirror menu edits to the SD file so they survive a reflash
       if(setting_item_updown == 1){
         setting_item ++;
         screen31UP();
