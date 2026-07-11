@@ -839,6 +839,16 @@ void handleHttpClient(WiFiClient &c) {
         sendResponse(c, 500, "Internal Server Error", "text/plain", "could not write SD");
       }
     }
+  } else if (path == "/settings") {
+    sendResponse(c, 200, "OK", "application/json", build_settings_json());
+  } else if (path == "/savesettings") {
+    // Update print settings (SD file + EEPROM) so they survive a reflash.
+    if (printing) {
+      sendResponse(c, 409, "Conflict", "text/plain", "printing");
+    } else {
+      apply_settings_from_query(query);
+      sendResponse(c, 200, "OK", "application/json", "{\"ok\":true}");
+    }
   } else if (path == "/start") {
     if (printing) {
       sendResponse(c, 409, "Conflict", "text/plain", "already printing");

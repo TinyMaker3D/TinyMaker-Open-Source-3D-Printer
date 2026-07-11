@@ -18,7 +18,7 @@ Then set your WiFi via `wifi.txt` on the SD card or the printer's hotspot setup 
 ## Integrity
 
 ```
-SHA-256  6ba0ec1ec8bf7f15fb93d622df3fbe50cc2dc072bcd8f8ec55a6bf39ecaa2c36
+SHA-256  fdf82da6f95f79db16326b5c76e33363fdc55bb08d8f754b269bbc731b325372
 ```
 
 Verify: `sha256sum TinyMaker_WiFi.bin` (Linux/macOS/Git Bash) or

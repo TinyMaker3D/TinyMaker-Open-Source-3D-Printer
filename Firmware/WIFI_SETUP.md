@@ -71,6 +71,23 @@ your network.
 | GET  | `/delete?folder=NAME` | Delete a folder |
 | GET  | `/scan` | JSON array of nearby WiFi networks (for the setup page) |
 | GET  | `/savewifi?ssid=..&pass=..` | Write `/wifi.txt` and reboot to apply |
+| GET  | `/settings` | JSON of the current print settings |
+| GET  | `/savesettings?layer_height=..&base_exposure=..&...` | Update settings → `/settings.txt` + EEPROM |
+
+## Print settings (persist across reflashing)
+
+Print parameters (layer height, exposures, layer counts, lift distances/feedrates) are
+stored in **`/settings.txt`** on the SD card as well as in EEPROM. Because the SD card is
+never touched by flashing, your tuned settings survive any reflash (even a full erase).
+
+- Edit them from the web UI's **Print Settings** card (saved to the SD file + mirrored to
+  the printer's menu), or from the printer's own Settings menu (also written to the SD
+  file). Either way both stores stay in sync.
+- On boot the firmware loads `/settings.txt` if present; otherwise it uses a valid EEPROM
+  or the built-in defaults, and seeds the file. So a fresh/erased board comes up with
+  sensible defaults automatically — no manual "Back to Default" needed.
+- The file is plain `key=value` text, e.g. `base_exposure=35`, so you can pre-configure or
+  clone settings by copying it between cards.
 
 ---
 

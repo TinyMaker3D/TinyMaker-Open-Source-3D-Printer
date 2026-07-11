@@ -1615,9 +1615,10 @@ void screen311(){
       Slow_Lift_Feedrate = EEPROM.read(8);
       Fast_Lift_Feedrate = EEPROM.read(9);
       Drop_Back_Feedrate = EEPROM.read(10);
-      
+      save_settings_to_sd(); // mirror the reset defaults to the SD file too
+
       setting_item = 10;
-      screen31DOWN(); // Refresh Screen           
+      screen31DOWN(); // Refresh Screen
     } 
   }
   delay(300);

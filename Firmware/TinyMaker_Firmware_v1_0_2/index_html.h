@@ -28,6 +28,10 @@ const char INDEX_HTML[] PROGMEM = R"HTML(<!doctype html>
   .filebtn { display:inline-block; background:#333; color:#eee; border:1px solid #444;
              border-radius:8px; padding:10px 14px; font-weight:700; font-size:14px; cursor:pointer; }
   .filebtn input { display:none; }
+  .setrow { display:flex; justify-content:space-between; align-items:center; gap:10px;
+            margin:7px 0; font-size:14px; }
+  .setrow input { width:96px; background:#111; border:1px solid #333; color:#eee;
+                  border-radius:8px; padding:8px; font-size:14px; text-align:right; }
   .folder { display:flex; justify-content:space-between; align-items:center; gap:8px;
             padding:8px 0; border-bottom:1px solid #262626; }
   .folder:last-child { border-bottom:0; }
@@ -81,6 +85,27 @@ const char INDEX_HTML[] PROGMEM = R"HTML(<!doctype html>
     <div class="row" style="margin-top:8px"><button onclick="upload()">Upload</button></div>
     <progress id="prog" value="0" max="100" style="display:none"></progress>
     <div id="uplog" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h2>Print Settings</h2>
+    <p class="muted">Saved to the SD card (<code>settings.txt</code>) so they survive a
+      reflash, and mirrored to the printer's on-screen menu.</p>
+    <div class="setrow"><span>Layer height (mm)</span><input id="s_lh" type="number" step="0.01" min="0.01" max="2.5"></div>
+    <div class="setrow"><span>Base exposure (s)</span><input id="s_be" type="number" min="1" max="255"></div>
+    <div class="setrow"><span>Normal exposure (s)</span><input id="s_re" type="number" min="1" max="255"></div>
+    <div class="setrow"><span>Base layers</span><input id="s_bl" type="number" min="0" max="255"></div>
+    <div class="setrow"><span>Transition layers</span><input id="s_tl" type="number" min="0" max="255"></div>
+    <div class="setrow"><span>Slow lift distance (mm)</span><input id="s_sld" type="number" min="0" max="255"></div>
+    <div class="setrow"><span>Fast lift distance (mm)</span><input id="s_fld" type="number" min="0" max="255"></div>
+    <div class="setrow"><span>Slow lift feedrate (mm/min)</span><input id="s_slf" type="number" min="1" max="255"></div>
+    <div class="setrow"><span>Fast lift feedrate (mm/min)</span><input id="s_flf" type="number" min="1" max="255"></div>
+    <div class="setrow"><span>Drop-back feedrate (mm/min)</span><input id="s_dbf" type="number" min="1" max="255"></div>
+    <div class="row" style="margin-top:10px">
+      <button onclick="saveSettings()">Save Settings</button>
+      <button class="sec" onclick="loadSettings()">Reload</button>
+    </div>
+    <div id="setmsg" class="muted"></div>
   </div>
 
   <div class="card">
@@ -201,6 +226,34 @@ async function doStart() {
   setTimeout(refresh, 500);
 }
 
+async function loadSettings() {
+  try {
+    const r = await fetch('/settings'); const s = await r.json();
+    $('#s_lh').value = s.layer_height;      $('#s_be').value = s.base_exposure;
+    $('#s_re').value = s.regular_exposure;  $('#s_bl').value = s.base_layers;
+    $('#s_tl').value = s.transition_layers; $('#s_sld').value = s.slow_lift_distance;
+    $('#s_fld').value = s.fast_lift_distance; $('#s_slf').value = s.slow_lift_feedrate;
+    $('#s_flf').value = s.fast_lift_feedrate; $('#s_dbf').value = s.drop_back_feedrate;
+  } catch (e) {}
+}
+
+async function saveSettings() {
+  const q = new URLSearchParams({
+    layer_height: $('#s_lh').value, base_exposure: $('#s_be').value,
+    regular_exposure: $('#s_re').value, base_layers: $('#s_bl').value,
+    transition_layers: $('#s_tl').value, slow_lift_distance: $('#s_sld').value,
+    fast_lift_distance: $('#s_fld').value, slow_lift_feedrate: $('#s_slf').value,
+    fast_lift_feedrate: $('#s_flf').value, drop_back_feedrate: $('#s_dbf').value
+  });
+  $('#setmsg').textContent = 'Saving...';
+  try {
+    const r = await fetch('/savesettings?' + q.toString());
+    $('#setmsg').textContent = r.ok ? 'Saved to the SD card (survives reflash).'
+                                    : 'Save failed (busy printing?).';
+    if (r.ok) loadSettings();
+  } catch (e) { $('#setmsg').textContent = 'Save failed.'; }
+}
+
 async function scanWifi() {
   $('#wifimsg').textContent = 'Scanning...';
   try {
@@ -290,7 +343,7 @@ function upload() {
   next();
 }
 
-refresh(); loadFolders();
+refresh(); loadFolders(); loadSettings();
 setInterval(refresh, 2000);
 </script>
 </body>

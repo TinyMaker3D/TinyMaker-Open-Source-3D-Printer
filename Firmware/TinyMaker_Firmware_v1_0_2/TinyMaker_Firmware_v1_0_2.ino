@@ -39,7 +39,8 @@
 // Boot behavior: if /wifi.txt has a network, join it (STA). Otherwise - or if the join
 // fails - host a hotspot named AP_SSID so the setup page is always reachable.
 // NOTE: ESP32 WiFi is 2.4GHz only.
-#define WIFI_CONFIG_FILE "/wifi.txt"    // SD-card file holding SSID + password
+#define WIFI_CONFIG_FILE "/wifi.txt"     // SD-card file holding SSID + password
+#define SETTINGS_FILE    "/settings.txt" // SD-card file holding print settings (survives reflashing)
 #define AP_SSID          "TinyMaker"    // hotspot name shown when unconfigured/offline
 #define AP_PASS          "tinymaker123" // hotspot password (must be >= 8 chars)
 #define MDNS_HOST        "tinymaker"    // browse to http://tinymaker.local
@@ -243,21 +244,11 @@ void setup() {
   // -----------------------------------------------------------------------------------
   // Settings Loading
   // -----------------------------------------------------------------------------------
-  // Initialize EEPROM with 24 bytes of space to read stored parameters.  
-  EEPROM.begin(24);
-
-  // Read stored values from specific addresses.
-  // Layer Height is stored multiplied by 100 to save as integer, so divide by 100.00 to restore float  
-  Layer_Height = EEPROM.read(1) / 100.00;
-  Base_Exposure = EEPROM.read(2);
-  Regular_Exposure = EEPROM.read(3);
-  Base_Layer = EEPROM.read(4);
-  Transition_Layer = EEPROM.read(5);
-  Slow_Lift_Distance = EEPROM.read(6);
-  Fast_Lift_Distance = EEPROM.read(7);
-  Slow_Lift_Feedrate = EEPROM.read(8);
-  Fast_Lift_Feedrate = EEPROM.read(9);
-  Drop_Back_Feedrate = EEPROM.read(10);
+  // Load print settings. Priority: SD-card file (/settings.txt, survives reflashing) ->
+  // EEPROM (if it looks valid) -> built-in defaults. Whatever we load is mirrored into
+  // EEPROM so the on-printer menu stays consistent, and seeded to the SD file if missing.
+  // (See Settings.ino.)
+  init_settings();
 
   // -----------------------------------------------------------------------------------
   // Network Bring-up
@@ -661,7 +652,8 @@ void loop() {
       EEPROM.write(8, Slow_Lift_Feedrate);
       EEPROM.write(9, Fast_Lift_Feedrate);
       EEPROM.write(10, Drop_Back_Feedrate);
-      EEPROM.commit(); 
+      EEPROM.commit();
+      save_settings_to_sd(); // mirror menu edits to the SD file so they survive a reflash
       if(setting_item_updown == 1){
         setting_item ++;
         screen31UP();
