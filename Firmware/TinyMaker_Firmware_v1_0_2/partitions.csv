@@ -1,0 +1,14 @@
+# TinyMaker partition table - MUST match the stock layout.
+# The firmware keeps all print settings in the custom "eeprom" partition at
+# 0x290000 (subtype 0x99). The Arduino default scheme has NO eeprom partition,
+# which makes EEPROM.begin() fail and every setting read back as 0. Keeping this
+# file in the sketch folder forces the correct layout, and - because the eeprom
+# region is left untouched by a normal flash - preserves your saved settings.
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x5000,
+otadata,    data, ota,      0xe000,    0x2000,
+app0,       app,  ota_0,    0x10000,   0x140000,
+app1,       app,  ota_1,    0x150000,  0x140000,
+eeprom,     data, 0x99,     0x290000,  0x1000,
+spiffs,     data, spiffs,   0x291000,  0x16F000,

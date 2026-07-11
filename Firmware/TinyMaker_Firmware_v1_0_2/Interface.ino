@@ -64,6 +64,8 @@ void screen1(){
   gfx2->setCursor(63, 71);
   gfx2->print("Print");
 
+  draw_wifi_glyph(143, 2); // WiFi status indicator (top-right corner)
+
   screen = 1;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,6 +130,7 @@ void screen11(){
   gfx2->fillRoundRect(82, 58, 72, 18, 2,  0x879F);
   gfx2->setCursor(102, 71);
   gfx2->println("Next");
+  draw_wifi_glyph(143, 3); // WiFi status indicator in the header
   screen = 11;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -131,7 +131,8 @@ void lift_print(){
     if (stepper.distanceToGo()==lift_print_steps_fast){
       stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60); 
     }
-    stepper.run();    
+    stepper.run();
+    web_loop(); // keep the web UI responsive during the lift/lower move
     Duration2 = millis()-startTime2;
     if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1111 && print_canceled == false && print_paused == false){
       screen1111UP();
@@ -211,7 +212,8 @@ void lower_print(){
   stepper.enableOutputs();
   stepper.move(lower_print_steps); 
   while (stepper.distanceToGo()!= 0){
-    stepper.run();    
+    stepper.run();
+    web_loop(); // keep the web UI responsive during the lift/lower move
     Duration2 = millis()-startTime2;
     if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1111 && print_canceled == false && print_paused == false){
       screen1111UP();
