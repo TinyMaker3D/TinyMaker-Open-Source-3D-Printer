@@ -151,6 +151,7 @@ void screen111(){
   File entry;
   // Fast seek to avoid slow iterating over all files for layer counting
   do {
+    esp_task_wdt_reset();
     layer_counter += 100;
     FileName = foldersel_long;
     FileName += "/";
@@ -162,6 +163,7 @@ void screen111(){
 
   // Exact seek
   do {
+    esp_task_wdt_reset();
     layer_counter++;
     FileName = foldersel_long;
     FileName += "/";
@@ -725,6 +727,7 @@ void screen213(){
   long initial_homing = 0;
   long current_position;
   while(!digitalRead(end_stop)){
+    esp_task_wdt_reset();
     stepper.moveTo(initial_homing);  // Set the position to move to
     initial_homing--;  // Decrease by 1 for next move if needed
     stepper.run();  // Start moving the stepper 
@@ -826,6 +829,7 @@ void screen214(){
   stepper.enableOutputs();
   stepper.moveTo(lift_finished_print_steps); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     stepper.run();
     if (digitalRead(buttonBack) == LOW){
       gfx2->fillRoundRect(2, 20, 156, 56, 3, BLACK); 
@@ -1131,6 +1135,7 @@ void screen23111(){
   startTime = millis();
   Duration = 0;
   while (Duration <= ExposureMillis){
+    esp_task_wdt_reset();
     Duration = millis()-startTime;
     if (digitalRead(buttonBack) == LOW){
       buttonBackClicked = 1;

@@ -8,6 +8,7 @@ void folderDown(File dir) {
   counter++;  
   for (int i = 0; i < counter; i++) {
     while (true) {
+      esp_task_wdt_reset();
       File entry =  dir.openNextFile();     
       if (! entry) {
         counter--;
@@ -52,6 +53,7 @@ void folderUp(File dir) {
     counter --;
     for (int i = 0; i < counter; i++) {
       while (true) {
+        esp_task_wdt_reset();
         File entry =  dir.openNextFile();
         if (! entry) {
           break;

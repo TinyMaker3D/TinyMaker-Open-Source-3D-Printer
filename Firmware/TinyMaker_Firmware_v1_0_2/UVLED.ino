@@ -23,6 +23,7 @@ void turn_on_LED(){
   digitalWrite(LED, HIGH); 
   
   while (Duration <= ExposureMillis){
+    esp_task_wdt_reset();
     Duration = millis()-startTime;
     Duration2 = millis()-startTime2;
     

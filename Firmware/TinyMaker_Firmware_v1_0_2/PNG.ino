@@ -32,6 +32,7 @@ int32_t mySeek(PNGFILE *handle, int32_t position) {
  */
 void PNGDraw(PNGDRAW *pDraw) {
   uint16_t usPixels[320];
+  esp_task_wdt_reset();
   png.getLineAsRGB565(pDraw, usPixels, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff); // Convert line to RGB565
   gfx1->draw16bitRGBBitmap(0, pDraw->y + 0, usPixels, pDraw->iWidth, 1);      // Draw to display buffer
 }

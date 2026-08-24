@@ -19,6 +19,7 @@ void manual_lift(){
   byte cancel = 0;
   long max_pos = (long)(max_height * steps_mm);
   while (cancel == 0 && stepper.distanceToGo()!= 0 && stepper.currentPosition() < max_pos){
+    esp_task_wdt_reset();
     stepper.run();
     if (digitalRead(buttonBack) == LOW)
       cancel = 1;
@@ -65,6 +66,7 @@ void manual_down(){
   }
   byte cancel = 0;
   while (cancel == 0 && stepper.distanceToGo()!= 0 && !digitalRead(end_stop)){
+    esp_task_wdt_reset();
     stepper.run(); 
     if (digitalRead(buttonBack) == LOW)
       cancel = 1;       
@@ -105,6 +107,7 @@ void lift_print(){
   stepper.enableOutputs();
   stepper.move(lift_print_steps_total); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     if (stepper.distanceToGo()==lift_print_steps_fast){
       stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60); 
     }
@@ -188,6 +191,7 @@ void lower_print(){
   stepper.enableOutputs();
   stepper.move(lower_print_steps); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     stepper.run();    
     Duration2 = millis()-startTime2;
     if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1111 && print_canceled == false && print_paused == false){
@@ -267,6 +271,7 @@ void lift_finished_print(){
   stepper.enableOutputs();
   stepper.moveTo(lift_finished_print_steps); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     stepper.run();
   }
   stepper.disableOutputs();

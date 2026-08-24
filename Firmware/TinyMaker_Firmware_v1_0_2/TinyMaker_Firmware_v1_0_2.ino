@@ -21,6 +21,7 @@
 #include "FreeSans8pt7b.h"       // Custom font
 #include <PNGdec.h>              // PNG decoder library for reading print layers
 #include <SdFat.h>               // SD card file system library
+#include "esp_task_wdt.h"        // Task watchdog
 
 // ===================================================================================
 // Pin Definitions
@@ -152,7 +153,14 @@ PNG png; // PNG decoder instance
  * @brief Setup Function
  * Initializes all hardware components, loads settings, and sets the initial state
  */
-void setup() {  
+void setup() {
+  // -----------------------------------------------------------------------------------
+  // Task watchdog: 10s timeout, panic on expiry. Long motion/exposure loops
+  // call esp_task_wdt_reset() to keep it fed.
+  // -----------------------------------------------------------------------------------
+  esp_task_wdt_init(10, true);
+  esp_task_wdt_add(NULL);
+
   // -----------------------------------------------------------------------------------
   // Pin Configuration
   // -----------------------------------------------------------------------------------
@@ -518,6 +526,7 @@ void loop() {
       layer_counter = 0;
       File entry;
       do {
+        esp_task_wdt_reset();
         layer_counter += 100;
         FileName = foldersel_long;
         FileName += "/";
@@ -528,6 +537,7 @@ void loop() {
       layer_counter -= 100;
 
       do {
+        esp_task_wdt_reset();
         layer_counter++;
         FileName = foldersel_long;
         FileName += "/";
@@ -568,6 +578,7 @@ void loop() {
         long initial_homing = 0;
         long current_position;
         while(!digitalRead(end_stop)){
+          esp_task_wdt_reset();
           stepper.moveTo(initial_homing);  // Set the position to move to
           initial_homing--;  // Decrease by 1 for next move if needed
           stepper.run();  // Start moving the stepper          
@@ -626,6 +637,7 @@ void loop() {
         // Printing Loop
         // -------------------------------------------------------------------------------       
         while(!homing_canceled && !print_canceled){            
+          esp_task_wdt_reset();
           estimated_seconds = 0;
           estimated_hours = 0;
           estimated_minutes = 0;
@@ -685,8 +697,10 @@ void loop() {
               stepper.move(20 * steps_mm);
             else
               stepper.moveTo(max_height * steps_mm);  
-            while (stepper.distanceToGo()!= 0)
+            while (stepper.distanceToGo()!= 0){
+              esp_task_wdt_reset();
               stepper.run();
+            }
             stepper.disableOutputs();
             delay(10); 
 
@@ -697,6 +711,7 @@ void loop() {
             screen1111DOWN();
               
             while(print_paused == true){
+              esp_task_wdt_reset();
               Duration2 = millis()-startTime2;
               if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1112){
               screen1111UP();
@@ -753,8 +768,10 @@ void loop() {
               stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60);
               stepper.enableOutputs();
               stepper.moveTo(Position_before_pause);  
-              while (stepper.distanceToGo()!= 0)
+              while (stepper.distanceToGo()!= 0){
+                esp_task_wdt_reset();
                 stepper.run();
+              }
               stepper.disableOutputs();
               delay(10);
               gfx2->fillRect(136, 12, 16, 16, RED);
