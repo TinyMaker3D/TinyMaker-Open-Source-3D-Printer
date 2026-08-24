@@ -92,30 +92,6 @@ void manual_down(){
 
 
 /**
- * @brief Home Machine
- * Moves the Z-axis down until the endstop is triggered to establish the zero position.
- */
-void home_machine(){
-  Serial.println("homing Machine");
-  stepper.setMaxSpeed(1200.0);
-  stepper.enableOutputs();
-  int initial_homing = -1;
-  while(!digitalRead(end_stop)){
-    stepper.moveTo(initial_homing);  // Set the position to move to
-    initial_homing--;  // Decrease by 1 for next move if needed
-    stepper.run();  // Start moving the stepper
-  }
-  stepper.setCurrentPosition(0);
-  Serial.println("HOME");
-  delay(100);
-  stepper.disableOutputs();
-}
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-/**
  * @brief Lift Print (Peel)
  * Performs the lift sequence to peel the cured layer.
  * Includes Slow Lift followed by Fast Lift.
