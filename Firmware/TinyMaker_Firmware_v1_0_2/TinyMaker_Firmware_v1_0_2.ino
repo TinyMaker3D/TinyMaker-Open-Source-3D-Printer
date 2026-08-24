@@ -72,10 +72,10 @@ Arduino_GFX *gfx2 = new Arduino_ST7735(bus2, -1 /* RST */, 3 /* rotation */, tru
 
 // Timing Calculation Variables
 // Used to track print time and button press duration
-int startTime;
-int Duration;
-int startTime2;
-int Duration2;
+unsigned long startTime;
+unsigned long Duration;
+unsigned long startTime2;
+unsigned long Duration2;
 
 // State Variables
 int screen = 1;             // Current screen ID
