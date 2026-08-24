@@ -8,6 +8,7 @@ Thumbs.db
 
 # Build artifacts
 build/
+.pio/
 *.elf
 *.hex
 *.bin
