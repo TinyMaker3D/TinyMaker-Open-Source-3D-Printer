@@ -187,6 +187,7 @@ void screen111(){
   // Calculate print time
   estimated_seconds += Base_Layer * Base_Exposure;
   estimated_seconds += (layer_counter - Base_Layer) * Regular_Exposure;
+  estimated_seconds += layer_counter * (Rest_Before_Lift + Rest_After_Retract);
   motor_updown_time_total = motor_updown_time * (layer_counter - 1);
   estimated_seconds += motor_updown_time_total; 
   estimated_hours = estimated_seconds / 3600;
@@ -1363,6 +1364,38 @@ void screen31UP(){
       gfx2->print(" "); 
       gfx2->print("mm/min");  
       gfx2->setCursor(5, 56);
+      gfx2->println("Rest Before Lift");
+      gfx2->setCursor(5, 74);
+      gfx2->print(Rest_Before_Lift);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->drawRoundRect(0, 41, 160, 39, 3, BLACK);
+      gfx2->drawRoundRect(0, 0, 160, 39, 3, WHITE); 
+        break;     
+      case 11:
+      gfx2->setCursor(5, 15);
+      gfx2->println("Rest Before Lift"); 
+      gfx2->setCursor(5, 33);
+      gfx2->print(Rest_Before_Lift);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->setCursor(5, 56);
+      gfx2->println("Rest After Retract");
+      gfx2->setCursor(5, 74);
+      gfx2->print(Rest_After_Retract);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->drawRoundRect(0, 41, 160, 39, 3, BLACK);
+      gfx2->drawRoundRect(0, 0, 160, 39, 3, WHITE); 
+        break;     
+      case 12:
+      gfx2->setCursor(5, 15);
+      gfx2->println("Rest After Retract"); 
+      gfx2->setCursor(5, 33);
+      gfx2->print(Rest_After_Retract);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->setCursor(5, 56);
       gfx2->println("Back to Default");     
       gfx2->drawRoundRect(0, 41, 160, 39, 3, BLACK);
       gfx2->drawRoundRect(0, 0, 160, 39, 3, WHITE); 
@@ -1404,7 +1437,7 @@ void screen31UP(){
  * Navigates down through the settings list.
  */
 void screen31DOWN(){
-  if (setting_item < 11) {
+  if (setting_item < 13) {
     setting_item ++;
     gfx2->fillScreen(BLACK);
     gfx2->setFont(&FreeSans8pt7b);
@@ -1555,6 +1588,38 @@ void screen31DOWN(){
       gfx2->print(" "); 
       gfx2->print("mm/min");  
       gfx2->setCursor(5, 56);
+      gfx2->println("Rest Before Lift");
+      gfx2->setCursor(5, 74);
+      gfx2->print(Rest_Before_Lift);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->drawRoundRect(0, 41, 160, 39, 3, WHITE);
+      gfx2->drawRoundRect(0, 0, 160, 39, 3, BLACK); 
+        break;     
+      case 12:
+      gfx2->setCursor(5, 15);
+      gfx2->println("Rest Before Lift"); 
+      gfx2->setCursor(5, 33);
+      gfx2->print(Rest_Before_Lift);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->setCursor(5, 56);
+      gfx2->println("Rest After Retract");
+      gfx2->setCursor(5, 74);
+      gfx2->print(Rest_After_Retract);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->drawRoundRect(0, 41, 160, 39, 3, WHITE);
+      gfx2->drawRoundRect(0, 0, 160, 39, 3, BLACK); 
+        break;     
+      case 13:
+      gfx2->setCursor(5, 15);
+      gfx2->println("Rest After Retract"); 
+      gfx2->setCursor(5, 33);
+      gfx2->print(Rest_After_Retract);
+      gfx2->print(" "); 
+      gfx2->print("s");
+      gfx2->setCursor(5, 56);
       gfx2->println("Back to Default");     
       gfx2->drawRoundRect(0, 41, 160, 39, 3, WHITE);
       gfx2->drawRoundRect(0, 0, 160, 39, 3, BLACK); 
@@ -1567,11 +1632,11 @@ void screen31DOWN(){
     gfx2->setTextColor(WHITE);
     gfx2->setTextSize(1);
     gfx2->setCursor(5, 15);
-    gfx2->println("Drop Back Feedrate"); 
+    gfx2->println("Rest After Retract"); 
     gfx2->setCursor(5, 33);
-    gfx2->print(Drop_Back_Feedrate);
+    gfx2->print(Rest_After_Retract);
     gfx2->print(" "); 
-    gfx2->print("mm/min");  
+    gfx2->print("s");
     gfx2->setCursor(5, 56);
     gfx2->println("Back to Default");     
     gfx2->drawRoundRect(0, 41, 160, 39, 3, WHITE);
@@ -1597,7 +1662,7 @@ void screen311(){
     screen = 311;  
   }
   if (setting_item_updown == 0) {
-    if(setting_item != 11){
+    if(setting_item != 13){
       // Bottom Option Selected
       gfx2->fillTriangle(151, 61, 148, 64, 154, 64, WHITE); 
       gfx2->fillTriangle(151, 74, 148, 71, 154, 71, WHITE); 
@@ -1615,6 +1680,8 @@ void screen311(){
       EEPROM.write(8, 40);
       EEPROM.write(9, 50);
       EEPROM.write(10, 50);
+      EEPROM.write(11, 2);
+      EEPROM.write(12, 0);
       EEPROM.commit(); 
       
       // Reload from EEPROM
@@ -1628,8 +1695,10 @@ void screen311(){
       Slow_Lift_Feedrate = EEPROM.read(8);
       Fast_Lift_Feedrate = EEPROM.read(9);
       Drop_Back_Feedrate = EEPROM.read(10);
+      Rest_Before_Lift = EEPROM.read(11);
+      Rest_After_Retract = EEPROM.read(12);
       
-      setting_item = 10;
+      setting_item = 12;
       screen31DOWN(); // Refresh Screen           
     } 
   }
@@ -1745,6 +1814,26 @@ void screen3111increase(){
         gfx2->print(" "); 
         gfx2->print("mm/min");
       }
+      case 11:
+      if(Rest_Before_Lift < 10){
+        Rest_Before_Lift ++;
+        gfx2->fillRect(3, 20, 80, 17, BLACK);
+        gfx2->setCursor(5, 33);
+        gfx2->print(Rest_Before_Lift);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
+      case 12:
+      if(Rest_After_Retract < 10){
+        Rest_After_Retract ++;
+        gfx2->fillRect(3, 20, 80, 17, BLACK);
+        gfx2->setCursor(5, 33);
+        gfx2->print(Rest_After_Retract);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
         break;
     }
   }
@@ -1836,6 +1925,26 @@ void screen3111increase(){
         gfx2->print(" "); 
         gfx2->print("mm/min");
       }
+      case 11:
+      if(Rest_Before_Lift < 10){
+        Rest_Before_Lift ++;
+        gfx2->fillRect(3, 61, 80, 17, BLACK);
+        gfx2->setCursor(5, 74);
+        gfx2->print(Rest_Before_Lift);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
+      case 12:
+      if(Rest_After_Retract < 10){
+        Rest_After_Retract ++;
+        gfx2->fillRect(3, 61, 80, 17, BLACK);
+        gfx2->setCursor(5, 74);
+        gfx2->print(Rest_After_Retract);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
         break;   
     }    
   }
@@ -1952,6 +2061,26 @@ void screen3111decrease(){
         gfx2->print(" "); 
         gfx2->print("mm/min");
       }
+      case 11:
+      if(Rest_Before_Lift > 0){
+        Rest_Before_Lift --;
+        gfx2->fillRect(3, 20, 80, 17, BLACK);
+        gfx2->setCursor(5, 33);
+        gfx2->print(Rest_Before_Lift);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
+      case 12:
+      if(Rest_After_Retract > 0){
+        Rest_After_Retract --;
+        gfx2->fillRect(3, 20, 80, 17, BLACK);
+        gfx2->setCursor(5, 33);
+        gfx2->print(Rest_After_Retract);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
         break;   
     }
   }
@@ -2043,6 +2172,26 @@ void screen3111decrease(){
         gfx2->print(" "); 
         gfx2->print("mm/min");
       }
+      case 11:
+      if(Rest_Before_Lift > 0){
+        Rest_Before_Lift --;
+        gfx2->fillRect(3, 61, 80, 17, BLACK);
+        gfx2->setCursor(5, 74);
+        gfx2->print(Rest_Before_Lift);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
+      case 12:
+      if(Rest_After_Retract > 0){
+        Rest_After_Retract --;
+        gfx2->fillRect(3, 61, 80, 17, BLACK);
+        gfx2->setCursor(5, 74);
+        gfx2->print(Rest_After_Retract);
+        gfx2->print(" "); 
+        gfx2->print("s");
+      }
+        break;
         break;
     }    
   }

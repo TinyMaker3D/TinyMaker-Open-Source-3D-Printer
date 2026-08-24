@@ -76,6 +76,7 @@ Arduino_GFX *gfx2 = new Arduino_ST7735(bus2, -1 /* RST */, 3 /* rotation */, tru
 unsigned long startTime;
 unsigned long Duration;
 unsigned long startTime2;
+unsigned long rest_start;
 unsigned long Duration2;
 
 // State Variables
@@ -124,6 +125,8 @@ byte Fast_Lift_Distance ;   // Distance for fast lift (mm)
 int Slow_Lift_Feedrate ;    // Speed for slow lift (mm/min)
 int Fast_Lift_Feedrate ;    // Speed for fast lift (mm/min)
 int Drop_Back_Feedrate ;    // Speed for retract (mm/min)
+byte Rest_Before_Lift ;     // Wait after the UV goes off, before the lift (s)
+byte Rest_After_Retract ;   // Wait after the drop back, before the next layer (s)
 
 // Default Manual Exposure Time
 int manual_exposure = 35;
@@ -218,8 +221,8 @@ void setup() {
   // exposure / layer-height values. These are the same values "Back to Default"
   // writes in screen311(), so they are in range for the settings screens and
   // get_motor_updown_time() has a case for the combination.
-  if (EEPROM.read(0) != 0xA5){
-    EEPROM.write(0, 0xA5);
+  if (EEPROM.read(0) != 0xA6){
+    EEPROM.write(0, 0xA6);
     EEPROM.write(1, 10);  // Layer_Height = 0.10 mm
     EEPROM.write(2, 35);  // Base_Exposure (s)
     EEPROM.write(3, 14);  // Regular_Exposure (s)
@@ -230,6 +233,8 @@ void setup() {
     EEPROM.write(8, 40);  // Slow_Lift_Feedrate (mm/min)
     EEPROM.write(9, 50);  // Fast_Lift_Feedrate (mm/min)
     EEPROM.write(10, 50); // Drop_Back_Feedrate (mm/min)
+    EEPROM.write(11, 2);  // Rest_Before_Lift (s)
+    EEPROM.write(12, 0);  // Rest_After_Retract (s)
     EEPROM.commit();
   }
 
@@ -245,6 +250,8 @@ void setup() {
   Slow_Lift_Feedrate = EEPROM.read(8);
   Fast_Lift_Feedrate = EEPROM.read(9);
   Drop_Back_Feedrate = EEPROM.read(10);
+  Rest_Before_Lift = EEPROM.read(11);
+  Rest_After_Retract = EEPROM.read(12);
   
   delay(1000);
   screen1(); // jumps to Main Menu
@@ -379,6 +386,8 @@ void loop() {
       Slow_Lift_Feedrate = EEPROM.read(8);
       Fast_Lift_Feedrate = EEPROM.read(9);
       Drop_Back_Feedrate = EEPROM.read(10);
+      Rest_Before_Lift = EEPROM.read(11);
+      Rest_After_Retract = EEPROM.read(12);
       if(setting_item_updown == 1){
         setting_item ++;
         screen31UP();
@@ -656,6 +665,7 @@ void loop() {
           if (current_layer < Base_Layer)
             estimated_seconds += (Base_Layer - current_layer) * Base_Exposure;                
           estimated_seconds += (layer_counter - current_layer) * Regular_Exposure;            
+          estimated_seconds += (layer_counter - current_layer) * (Rest_Before_Lift + Rest_After_Retract);
           motor_updown_time_total += (layer_counter - current_layer - 1) * motor_updown_time;            
           estimated_seconds += motor_updown_time_total;             
           estimated_hours = estimated_seconds / 3600;
@@ -686,6 +696,12 @@ void loop() {
                   
           turn_on_LED();          
           gfx1->fillScreen(BLACK);
+          
+          rest_start = millis();
+          while (millis() - rest_start < Rest_Before_Lift * 1000UL){
+            esp_task_wdt_reset();
+            delay(10);
+          }
           
           if (current_state != 4 && current_state != 5){
             current_state = 2;
@@ -798,6 +814,11 @@ void loop() {
             current_state = 3;
             screen1111_state();
             lower_print();              
+            rest_start = millis();
+            while (millis() - rest_start < Rest_After_Retract * 1000UL){
+              esp_task_wdt_reset();
+              delay(10);
+            }
           }           
         } 
         if (!homing_canceled){
@@ -894,6 +915,8 @@ void loop() {
       EEPROM.write(8, Slow_Lift_Feedrate);
       EEPROM.write(9, Fast_Lift_Feedrate);
       EEPROM.write(10, Drop_Back_Feedrate);
+      EEPROM.write(11, Rest_Before_Lift);
+      EEPROM.write(12, Rest_After_Retract);
       EEPROM.commit(); 
       if(setting_item_updown == 1){
         setting_item ++;
