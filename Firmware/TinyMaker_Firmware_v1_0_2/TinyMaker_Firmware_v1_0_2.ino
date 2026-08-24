@@ -202,8 +202,28 @@ void setup() {
   // -----------------------------------------------------------------------------------
   // Settings Loading
   // -----------------------------------------------------------------------------------
-  // Initialize EEPROM with 24 bytes of space to read stored parameters.  
+  // Initialize EEPROM with 24 bytes of space to read stored parameters.
   EEPROM.begin(24);
+
+  // Address 0 holds a magic byte. On a fresh chip (0xFF) or an erased EEPROM
+  // partition (0x00) write defaults so the printer does not boot with garbage
+  // exposure / layer-height values. These are the same values "Back to Default"
+  // writes in screen311(), so they are in range for the settings screens and
+  // get_motor_updown_time() has a case for the combination.
+  if (EEPROM.read(0) != 0xA5){
+    EEPROM.write(0, 0xA5);
+    EEPROM.write(1, 10);  // Layer_Height = 0.10 mm
+    EEPROM.write(2, 35);  // Base_Exposure (s)
+    EEPROM.write(3, 14);  // Regular_Exposure (s)
+    EEPROM.write(4, 2);   // Base_Layer
+    EEPROM.write(5, 5);   // Transition_Layer
+    EEPROM.write(6, 1);   // Slow_Lift_Distance (mm)
+    EEPROM.write(7, 2);   // Fast_Lift_Distance (mm)
+    EEPROM.write(8, 40);  // Slow_Lift_Feedrate (mm/min)
+    EEPROM.write(9, 50);  // Fast_Lift_Feedrate (mm/min)
+    EEPROM.write(10, 50); // Drop_Back_Feedrate (mm/min)
+    EEPROM.commit();
+  }
 
   // Read stored values from specific addresses.
   // Layer Height is stored multiplied by 100 to save as integer, so divide by 100.00 to restore float  
