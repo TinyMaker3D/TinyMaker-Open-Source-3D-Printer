@@ -13,6 +13,13 @@ void get_motor_updown_time(){
   i += Fast_Lift_Feedrate;
   i += Drop_Back_Feedrate / 10;
 
+  // Plain travel-time estimate, used when the measured table below has no case
+  // for the current combination. Without it the time remaining left out all
+  // motor movement.
+  motor_updown_time = (Slow_Lift_Distance * 60.0 / Slow_Lift_Feedrate)
+                    + (Fast_Lift_Distance * 60.0 / Fast_Lift_Feedrate)
+                    + ((Slow_Lift_Distance + Fast_Lift_Distance - Layer_Height) * 60.0 / Drop_Back_Feedrate);
+
   if(i <= 33555){
     switch(i){
       case 11222:
