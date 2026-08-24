@@ -1,0 +1,15 @@
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
+
+# Build artifacts
+build/
+.pio/
+*.elf
+*.hex
+*.bin
+*.map

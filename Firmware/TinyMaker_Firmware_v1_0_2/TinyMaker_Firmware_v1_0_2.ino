@@ -21,6 +21,7 @@
 #include "FreeSans8pt7b.h"       // Custom font
 #include <PNGdec.h>              // PNG decoder library for reading print layers
 #include <SdFat.h>               // SD card file system library
+#include "esp_task_wdt.h"        // Task watchdog
 
 // ===================================================================================
 // Pin Definitions
@@ -72,10 +73,11 @@ Arduino_GFX *gfx2 = new Arduino_ST7735(bus2, -1 /* RST */, 3 /* rotation */, tru
 
 // Timing Calculation Variables
 // Used to track print time and button press duration
-int startTime;
-int Duration;
-int startTime2;
-int Duration2;
+unsigned long startTime;
+unsigned long Duration;
+unsigned long startTime2;
+unsigned long rest_start;
+unsigned long Duration2;
 
 // State Variables
 int screen = 1;             // Current screen ID
@@ -123,6 +125,8 @@ byte Fast_Lift_Distance ;   // Distance for fast lift (mm)
 int Slow_Lift_Feedrate ;    // Speed for slow lift (mm/min)
 int Fast_Lift_Feedrate ;    // Speed for fast lift (mm/min)
 int Drop_Back_Feedrate ;    // Speed for retract (mm/min)
+byte Rest_Before_Lift ;     // Wait after the UV goes off, before the lift (s)
+byte Rest_After_Retract ;   // Wait after the drop back, before the next layer (s)
 
 // Default Manual Exposure Time
 int manual_exposure = 35;
@@ -152,7 +156,14 @@ PNG png; // PNG decoder instance
  * @brief Setup Function
  * Initializes all hardware components, loads settings, and sets the initial state
  */
-void setup() {  
+void setup() {
+  // -----------------------------------------------------------------------------------
+  // Task watchdog: 10s timeout, panic on expiry. Long motion/exposure loops
+  // call esp_task_wdt_reset() to keep it fed.
+  // -----------------------------------------------------------------------------------
+  esp_task_wdt_init(10, true);
+  esp_task_wdt_add(NULL);
+
   // -----------------------------------------------------------------------------------
   // Pin Configuration
   // -----------------------------------------------------------------------------------
@@ -202,8 +213,30 @@ void setup() {
   // -----------------------------------------------------------------------------------
   // Settings Loading
   // -----------------------------------------------------------------------------------
-  // Initialize EEPROM with 24 bytes of space to read stored parameters.  
+  // Initialize EEPROM with 24 bytes of space to read stored parameters.
   EEPROM.begin(24);
+
+  // Address 0 holds a magic byte. On a fresh chip (0xFF) or an erased EEPROM
+  // partition (0x00) write defaults so the printer does not boot with garbage
+  // exposure / layer-height values. These are the same values "Back to Default"
+  // writes in screen311(), so they are in range for the settings screens and
+  // get_motor_updown_time() has a case for the combination.
+  if (EEPROM.read(0) != 0xA6){
+    EEPROM.write(0, 0xA6);
+    EEPROM.write(1, 10);  // Layer_Height = 0.10 mm
+    EEPROM.write(2, 35);  // Base_Exposure (s)
+    EEPROM.write(3, 14);  // Regular_Exposure (s)
+    EEPROM.write(4, 2);   // Base_Layer
+    EEPROM.write(5, 5);   // Transition_Layer
+    EEPROM.write(6, 1);   // Slow_Lift_Distance (mm)
+    EEPROM.write(7, 2);   // Fast_Lift_Distance (mm)
+    EEPROM.write(8, 40);  // Slow_Lift_Feedrate (mm/min)
+    EEPROM.write(9, 50);  // Fast_Lift_Feedrate (mm/min)
+    EEPROM.write(10, 50); // Drop_Back_Feedrate (mm/min)
+    EEPROM.write(11, 2);  // Rest_Before_Lift (s)
+    EEPROM.write(12, 0);  // Rest_After_Retract (s)
+    EEPROM.commit();
+  }
 
   // Read stored values from specific addresses.
   // Layer Height is stored multiplied by 100 to save as integer, so divide by 100.00 to restore float  
@@ -217,6 +250,8 @@ void setup() {
   Slow_Lift_Feedrate = EEPROM.read(8);
   Fast_Lift_Feedrate = EEPROM.read(9);
   Drop_Back_Feedrate = EEPROM.read(10);
+  Rest_Before_Lift = EEPROM.read(11);
+  Rest_After_Retract = EEPROM.read(12);
   
   delay(1000);
   screen1(); // jumps to Main Menu
@@ -351,6 +386,8 @@ void loop() {
       Slow_Lift_Feedrate = EEPROM.read(8);
       Fast_Lift_Feedrate = EEPROM.read(9);
       Drop_Back_Feedrate = EEPROM.read(10);
+      Rest_Before_Lift = EEPROM.read(11);
+      Rest_After_Retract = EEPROM.read(12);
       if(setting_item_updown == 1){
         setting_item ++;
         screen31UP();
@@ -498,6 +535,7 @@ void loop() {
       layer_counter = 0;
       File entry;
       do {
+        esp_task_wdt_reset();
         layer_counter += 100;
         FileName = foldersel_long;
         FileName += "/";
@@ -508,6 +546,7 @@ void loop() {
       layer_counter -= 100;
 
       do {
+        esp_task_wdt_reset();
         layer_counter++;
         FileName = foldersel_long;
         FileName += "/";
@@ -547,11 +586,17 @@ void loop() {
         stepper.enableOutputs();
         long initial_homing = 0;
         long current_position;
-        while(!digitalRead(end_stop)){
+        int endstop_streak = 0;
+        while (endstop_streak < 3){
+          esp_task_wdt_reset();
           stepper.moveTo(initial_homing);  // Set the position to move to
           initial_homing--;  // Decrease by 1 for next move if needed
-          stepper.run();  // Start moving the stepper          
+          stepper.run();  // Start moving the stepper
           current_position = stepper.currentPosition();
+          if (digitalRead(end_stop))
+            endstop_streak++;
+          else
+            endstop_streak = 0;
           if (current_position < -106799){
             stepper.disableOutputs();
             homing_canceled = true;
@@ -569,8 +614,14 @@ void loop() {
             gfx2->fillRoundRect(82, 51, 67, 18, 2,  0x879F);
             gfx2->setCursor(100, 64);
             gfx2->println("OK :(");
-            while(digitalRead(buttonOK) == HIGH);
-            break;  
+            unsigned long dismiss_start = millis();
+            while (millis() - dismiss_start < 30000UL){
+              esp_task_wdt_reset();
+              if (digitalRead(buttonOK) == LOW || digitalRead(buttonBack) == LOW)
+                break;
+              delay(10);
+            }
+            break;
           }
           if (Duration >= 500 && screen == 1111 && digitalRead(buttonOK) == LOW) {
             screen11111();
@@ -606,6 +657,7 @@ void loop() {
         // Printing Loop
         // -------------------------------------------------------------------------------       
         while(!homing_canceled && !print_canceled){            
+          esp_task_wdt_reset();
           estimated_seconds = 0;
           estimated_hours = 0;
           estimated_minutes = 0;
@@ -613,6 +665,7 @@ void loop() {
           if (current_layer < Base_Layer)
             estimated_seconds += (Base_Layer - current_layer) * Base_Exposure;                
           estimated_seconds += (layer_counter - current_layer) * Regular_Exposure;            
+          estimated_seconds += (layer_counter - current_layer) * (Rest_Before_Lift + Rest_After_Retract);
           motor_updown_time_total += (layer_counter - current_layer - 1) * motor_updown_time;            
           estimated_seconds += motor_updown_time_total;             
           estimated_hours = estimated_seconds / 3600;
@@ -644,6 +697,12 @@ void loop() {
           turn_on_LED();          
           gfx1->fillScreen(BLACK);
           
+          rest_start = millis();
+          while (millis() - rest_start < Rest_Before_Lift * 1000UL){
+            esp_task_wdt_reset();
+            delay(10);
+          }
+          
           if (current_state != 4 && current_state != 5){
             current_state = 2;
             screen1111_state();
@@ -665,8 +724,10 @@ void loop() {
               stepper.move(20 * steps_mm);
             else
               stepper.moveTo(max_height * steps_mm);  
-            while (stepper.distanceToGo()!= 0)
+            while (stepper.distanceToGo()!= 0){
+              esp_task_wdt_reset();
               stepper.run();
+            }
             stepper.disableOutputs();
             delay(10); 
 
@@ -677,6 +738,7 @@ void loop() {
             screen1111DOWN();
               
             while(print_paused == true){
+              esp_task_wdt_reset();
               Duration2 = millis()-startTime2;
               if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1112){
               screen1111UP();
@@ -733,8 +795,10 @@ void loop() {
               stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60);
               stepper.enableOutputs();
               stepper.moveTo(Position_before_pause);  
-              while (stepper.distanceToGo()!= 0)
+              while (stepper.distanceToGo()!= 0){
+                esp_task_wdt_reset();
                 stepper.run();
+              }
               stepper.disableOutputs();
               delay(10);
               gfx2->fillRect(136, 12, 16, 16, RED);
@@ -750,6 +814,11 @@ void loop() {
             current_state = 3;
             screen1111_state();
             lower_print();              
+            rest_start = millis();
+            while (millis() - rest_start < Rest_After_Retract * 1000UL){
+              esp_task_wdt_reset();
+              delay(10);
+            }
           }           
         } 
         if (!homing_canceled){
@@ -846,6 +915,8 @@ void loop() {
       EEPROM.write(8, Slow_Lift_Feedrate);
       EEPROM.write(9, Fast_Lift_Feedrate);
       EEPROM.write(10, Drop_Back_Feedrate);
+      EEPROM.write(11, Rest_Before_Lift);
+      EEPROM.write(12, Rest_After_Retract);
       EEPROM.commit(); 
       if(setting_item_updown == 1){
         setting_item ++;

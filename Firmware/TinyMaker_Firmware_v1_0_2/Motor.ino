@@ -17,12 +17,14 @@ void manual_lift(){
       break;    
   }
   byte cancel = 0;
-  while (cancel == 0 && stepper.distanceToGo()!= 0){
-    stepper.run(); 
+  long max_pos = (long)(max_height * steps_mm);
+  while (cancel == 0 && stepper.distanceToGo()!= 0 && stepper.currentPosition() < max_pos){
+    esp_task_wdt_reset();
+    stepper.run();
     if (digitalRead(buttonBack) == LOW)
-      cancel = 1;       
+      cancel = 1;
   }
-  stepper.disableOutputs();  
+  stepper.disableOutputs();
   if (cancel == 1){
     switch (screen){
       case 2211:
@@ -35,8 +37,8 @@ void manual_lift(){
       case 2231:
       screen221();
       screen223();
-        break;    
-    }  
+        break;
+    }
   }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,6 +66,7 @@ void manual_down(){
   }
   byte cancel = 0;
   while (cancel == 0 && stepper.distanceToGo()!= 0 && !digitalRead(end_stop)){
+    esp_task_wdt_reset();
     stepper.run(); 
     if (digitalRead(buttonBack) == LOW)
       cancel = 1;       
@@ -91,30 +94,6 @@ void manual_down(){
 
 
 /**
- * @brief Home Machine
- * Moves the Z-axis down until the endstop is triggered to establish the zero position.
- */
-void home_machine(){
-  Serial.println("homing Machine");
-  stepper.setMaxSpeed(1200.0);
-  stepper.enableOutputs();
-  int initial_homing = -1;
-  while(!digitalRead(end_stop)){
-    stepper.moveTo(initial_homing);  // Set the position to move to
-    initial_homing--;  // Decrease by 1 for next move if needed
-    stepper.run();  // Start moving the stepper
-  }
-  stepper.setCurrentPosition(0);
-  Serial.println("HOME");
-  delay(100);
-  stepper.disableOutputs();
-}
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-/**
  * @brief Lift Print (Peel)
  * Performs the lift sequence to peel the cured layer.
  * Includes Slow Lift followed by Fast Lift.
@@ -128,6 +107,7 @@ void lift_print(){
   stepper.enableOutputs();
   stepper.move(lift_print_steps_total); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     if (stepper.distanceToGo()==lift_print_steps_fast){
       stepper.setMaxSpeed(Fast_Lift_Feedrate * steps_mm / 60); 
     }
@@ -211,6 +191,7 @@ void lower_print(){
   stepper.enableOutputs();
   stepper.move(lower_print_steps); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     stepper.run();    
     Duration2 = millis()-startTime2;
     if (Duration2 >= 500 && digitalRead(buttonUp) == LOW && screen == 1111 && print_canceled == false && print_paused == false){
@@ -290,6 +271,7 @@ void lift_finished_print(){
   stepper.enableOutputs();
   stepper.moveTo(lift_finished_print_steps); 
   while (stepper.distanceToGo()!= 0){
+    esp_task_wdt_reset();
     stepper.run();
   }
   stepper.disableOutputs();
