@@ -4,7 +4,7 @@
  * Also handles button inputs (Pause, Cancel) during exposure.。
  */
 void turn_on_LED(){
-  long ExposureMillis;
+  long ExposureMillis = Regular_Exposure * 1000;
   if(current_layer <= Base_Layer)
     ExposureMillis = Base_Exposure * 1000;
   if(current_layer > Base_Layer && current_layer <= Base_Layer + Transition_Layer){
