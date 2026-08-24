@@ -753,7 +753,13 @@ void screen213(){
       gfx2->fillRoundRect(82, 51, 67, 18, 2,  0x879F);
       gfx2->setCursor(100, 64);
       gfx2->println("OK :(");
-      while(digitalRead(buttonOK) == HIGH);
+      unsigned long dismiss_start = millis();
+      while (millis() - dismiss_start < 30000UL){
+        esp_task_wdt_reset();
+        if (digitalRead(buttonOK) == LOW || digitalRead(buttonBack) == LOW)
+          break;
+        delay(10);
+      }
       screen21();      
       break;      
     }     
