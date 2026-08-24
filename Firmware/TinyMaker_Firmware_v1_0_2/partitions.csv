@@ -1,0 +1,16 @@
+# Partition table for the TinyMaker board.
+#
+# EEPROM.begin() on the ESP32 core looks up a data partition named "eeprom",
+# and none of the core's stock tables define one. Build with the default scheme
+# and EEPROM.begin() fails, every print setting reads back as 0 and the Z axis
+# gets a max speed of 0, so the machine looks dead. Arduino copies a
+# partitions.csv from the sketch folder over the selected scheme, so keeping
+# this file next to the sketch is enough to get the right layout.
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,   0x10000,  0x140000,
+app1,     app,  ota_1,   0x150000, 0x140000,
+eeprom,   data, 0x99,    0x290000, 0x1000,
+spiffs,   data, spiffs,  0x291000, 0x16F000,
