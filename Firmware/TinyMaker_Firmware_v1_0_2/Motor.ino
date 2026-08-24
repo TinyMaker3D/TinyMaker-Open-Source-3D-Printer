@@ -17,12 +17,13 @@ void manual_lift(){
       break;    
   }
   byte cancel = 0;
-  while (cancel == 0 && stepper.distanceToGo()!= 0){
-    stepper.run(); 
+  long max_pos = (long)(max_height * steps_mm);
+  while (cancel == 0 && stepper.distanceToGo()!= 0 && stepper.currentPosition() < max_pos){
+    stepper.run();
     if (digitalRead(buttonBack) == LOW)
-      cancel = 1;       
+      cancel = 1;
   }
-  stepper.disableOutputs();  
+  stepper.disableOutputs();
   if (cancel == 1){
     switch (screen){
       case 2211:
@@ -35,8 +36,8 @@ void manual_lift(){
       case 2231:
       screen221();
       screen223();
-        break;    
-    }  
+        break;
+    }
   }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
