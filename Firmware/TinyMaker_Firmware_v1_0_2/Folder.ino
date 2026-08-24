@@ -53,9 +53,9 @@ void folderUp(File dir) {
     for (int i = 0; i < counter; i++) {
       while (true) {
         File entry =  dir.openNextFile();
-        /*if (! entry) {
+        if (! entry) {
           break;
-        }*/
+        }
         if (entry.isDirectory()) {
           entry.getName(foldersel_long, 101);
           FileName = foldersel_long;
