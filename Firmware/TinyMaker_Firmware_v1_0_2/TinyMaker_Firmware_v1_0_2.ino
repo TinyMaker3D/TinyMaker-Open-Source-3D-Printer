@@ -577,12 +577,17 @@ void loop() {
         stepper.enableOutputs();
         long initial_homing = 0;
         long current_position;
-        while(!digitalRead(end_stop)){
+        int endstop_streak = 0;
+        while (endstop_streak < 3){
           esp_task_wdt_reset();
           stepper.moveTo(initial_homing);  // Set the position to move to
           initial_homing--;  // Decrease by 1 for next move if needed
-          stepper.run();  // Start moving the stepper          
+          stepper.run();  // Start moving the stepper
           current_position = stepper.currentPosition();
+          if (digitalRead(end_stop))
+            endstop_streak++;
+          else
+            endstop_streak = 0;
           if (current_position < -106799){
             stepper.disableOutputs();
             homing_canceled = true;
